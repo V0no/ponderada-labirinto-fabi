@@ -1,0 +1,17 @@
+{
+  "mesmo_labirinto": true,
+  "mesmo_alvo": true,
+  "observacoes_compativeis_com_mapa_original": true,
+  "mesmo_numero_de_passos": true,
+  "mesma_rota": true,
+  "mapa_suficiente_para_reproduzir_rota": true,
+  "passos_parte1": 102,
+  "passos_parte2": 102,
+  "ordem_de_desempate_bfs": [
+    "up",
+    "right",
+    "down",
+    "left"
+  ],
+  "rota_reproduzida_no_simulador": true
+}

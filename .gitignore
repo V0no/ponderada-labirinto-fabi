@@ -1,0 +1,15 @@
+# Saidas de compilacao ROS 2 e colcon
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Configuracoes locais de ferramentas e credenciais
+.agents/
+.codex/
+.aws/
