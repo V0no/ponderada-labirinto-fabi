@@ -263,11 +263,3 @@ permanecer aberto ao usar o comando `resolver`.
   ou timestamp ao protocolo para associar leituras e poses com garantia.
 - O serviço `/reset` responde antes de o Pygame aplicar a mudança. O cliente
   aguarda pelo menos 0,25 segundo e novas leituras antes de continuar.
-- Neste computador, a versão instalada do rosidl precisou de uma correção de
-  leitura UTF-8 para compilar no caminho `Área de trabalho`. Se outro ambiente
-  apresentar `list index out of range` com o caminho cortado em `rea de trabalho`,
-  o ajuste aplicado no Ubuntu foi:
-
-  ```bash
-  sudo sed -i.bak 's/file(STRINGS "${idl_output}" idl_tuples)/file(STRINGS "${idl_output}" idl_tuples ENCODING UTF-8)/' /opt/ros/jazzy/share/rosidl_adapter/cmake/rosidl_adapt_interfaces.cmake
-  ```
