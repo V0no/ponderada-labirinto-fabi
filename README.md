@@ -1,17 +1,18 @@
 # Navegação autônoma em labirinto
 
-Solução da atividade ponderada: planejamento de uma rota mínima com o mapa
-completo e exploração autônoma para construir um mapa capaz de reproduzir a
+## Introdução à ponderada
+
+Nesta atividade ponderada, apliquei algoritmos de grafos para resolver um
+desafio de navegação autônoma em labirinto. O trabalho foi dividido em duas
+partes: encontrar uma rota mínima até o alvo com acesso ao mapa completo e,
+depois, explorar o ambiente para construir um mapa capaz de reproduzir essa
 mesma rota.
 
 O simulador ROS 2/Pygame foi fornecido em
 [rmnicola/culling_games](https://github.com/rmnicola/culling_games) e está em
 `culling_games/`, com sua licença original preservada. O código da solução está
 no pacote `src/navegacao_autonoma/`.
-O commit de origem e a alteração no limite de quadros estão documentados em
-[`culling_games/ORIGEM.md`](culling_games/ORIGEM.md).
-
-## Executar
+## Como executar
 
 Ambiente usado: Ubuntu 24.04, ROS 2 Jazzy, Python 3.12, `colcon` e `pygame`.
 Todos os comandos abaixo devem ser executados no terminal Ubuntu com ROS.
@@ -45,7 +46,8 @@ aleatória inicial da janela não interfere na comparação.
 Encerre a teleoperação com Ctrl+C antes de executar a solução e deixe a janela
 do simulador aberta durante as duas partes.
 
-Em Bash, use `source install/setup.bash` no lugar de `setup.zsh`.
+Executei os comandos com `source install/setup.zsh` porque meu terminal usa
+Zsh. Para quem usa Bash, o comando equivalente é `source install/setup.bash`.
 
 ### Executar as partes separadamente
 
@@ -79,62 +81,127 @@ ros2 run navegacao_autonoma resolver demonstracao --mapa 1.csv --intervalo 0.15
 
 ## Parte 1: navegação com mapa
 
-1. Reiniciar o labirinto e consultar `/get_map`.
-2. Reconstruir a matriz e localizar `r` (robô) e `t` (alvo).
-3. Representar cada célula livre como um vértice e cada movimento cardinal
-   permitido como uma aresta de custo 1.
-4. Aplicar BFS, guardando o predecessor de cada vértice para reconstruir a rota.
-5. Enviar os comandos por `/move_command` e conferir os deslocamentos retornados.
-6. Salvar a referência da parte 1.
+### O que tinha que ser feito
 
-A BFS visita o grafo por distância crescente. Como todos os movimentos custam
-um passo, a primeira rota encontrada para o alvo tem o menor número de passos.
-O custo de tempo e memória da busca é `O(V + E)` e `O(V)`, respectivamente.
-Em um grid com até quatro conexões por célula, `E` é proporcional a `V`.
+Nesta parte, eu precisava desenvolver um algoritmo que encontrasse uma rota
+otimizada entre a posição inicial do robô e o alvo, tendo acesso ao mapa
+completo do labirinto.
+
+### O que pensei para esta parte
+
+Pensei no labirinto como um grafo: cada célula livre representa um vértice e
+cada movimento permitido entre células vizinhas representa uma aresta. Como
+o robô se movimenta somente nas quatro direções cardinais e cada movimento
+custa um passo, escolhi a busca em largura (BFS) para encontrar a rota com o
+menor número de movimentos.
+
+A BFS explora os vértices por distância crescente a partir da origem. Nesse
+caso, como todas as arestas têm o mesmo custo, a primeira rota encontrada até
+o alvo é mínima. Também decidi guardar o predecessor de cada célula visitada
+para reconstruir o caminho ao final da busca.
+
+### O que foi feito
+
+Implementei a seguinte sequência:
+
+1. Reiniciei o labirinto e consultei o mapa completo pelo serviço `/get_map`.
+2. Reconstruí a matriz e localizei `r` (robô) e `t` (alvo).
+3. Considerei as células transitáveis e suas conexões nas quatro direções.
+4. Apliquei BFS e reconstruí a rota usando os predecessores.
+5. Enviei os movimentos pelo serviço `/move_command` e conferi os
+   deslocamentos retornados.
+6. Salvei o mapa, a rota, os comandos e o custo em `parte1.json`, para usar
+   como referência na comparação com a parte 2.
+
+Na implementação, usei a ordem fixa `up`, `right`, `down`, `left` para analisar
+os vizinhos. Mantive essa mesma ordem na parte 2 para obter uma escolha
+consistente quando existe mais de uma rota mínima.
+
+A busca tem custo de tempo `O(V + E)` e de memória `O(V)`, em que `V` é o
+número de vértices e `E` é o número de arestas. Como cada célula tem no máximo
+quatro conexões, a quantidade de arestas é proporcional à de vértices.
 
 ## Parte 2: exploração e mapeamento
 
-O ponto inicial do robô recebe a coordenada relativa `(0, 0)`. Cada movimento
-bem-sucedido atualiza a linha ou coluna em uma unidade. As posições absolutas
-retornadas pelo serviço servem para detectar deslocamentos inesperados;
-`target_pos`, também retornado pelo simulador, é ignorado.
+### O que tinha que ser feito
 
-A DFS usa uma pilha para escolher células livres ainda não visitadas e retornar
-fisicamente pelos corredores quando encontra um beco sem saída. O nó assina
-`/culling_games/robot_sensors` com QoS best effort compatível com o publicador.
-As oito células vizinhas ajudam a construir o mapa, mas os movimentos usam
-somente cima, direita, baixo e esquerda. Células desconhecidas nunca são
-consideradas transitáveis.
+Nesta parte, eu precisava fazer o robô navegar pelo labirinto e construir o
+mapa durante a exploração. Depois, precisava comprovar que o mapa criado era
+suficiente para reproduzir a rota encontrada na parte 1.
 
-O simulador encerra a movimentação ao alcançar o alvo. Por isso, o robô observa
-e registra o alvo, mas adia sua entrada até a reprodução final. A exploração
-termina quando todas as células acessíveis sem atravessar o alvo foram visitadas
-e o robô retornou à origem.
+### O que pensei para esta parte
 
-Essa região é suficiente para encontrar a rota ótima até o alvo: todo caminho
-mínimo até ele termina em sua primeira entrada no alvo. Logo, todas as células
-anteriores pertencem à componente da origem quando o alvo é removido do grafo.
-A DFS explora essa componente inteira, inclusive eventuais atalhos e ciclos.
-Não é necessário explorar uma região cujo acesso exija passar primeiro pelo alvo.
+Escolhi a busca em profundidade (DFS) para organizar a exploração. Minha ideia
+foi visitar células livres ainda desconhecidas e retornar pelos corredores
+quando não houvesse mais caminhos novos naquele ponto. Para evitar repetições
+em ciclos, mantive o registro das células já visitadas.
 
-Depois da exploração, o programa:
+Como a DFS não garante a rota mínima, usei esse algoritmo para mapear o
+ambiente e deixei a busca da rota para uma BFS aplicada ao mapa descoberto.
+Também defini a posição inicial como `(0, 0)` e acompanhei os movimentos em
+coordenadas relativas, sem depender do mapa completo durante a exploração.
 
-1. Salva o mapa em JSON e CSV, além do trajeto de exploração.
-2. Reabre o JSON e aplica BFS apenas às células descobertas.
-3. Lê a referência da parte 1 e verifica o mapa, o alvo, as observações, o custo
-   e a sequência da rota, ajustando a diferença entre coordenadas absolutas e
-   relativas.
-4. Reinicia o mesmo labirinto e executa a rota calculada com o mapa descoberto.
+Um detalhe do simulador influenciou essa escolha: ao chegar ao alvo, o robô
+não pode mais se movimentar. Por isso, decidi registrar o alvo ao observá-lo e
+adiar sua entrada até a reprodução final. Assim, consegui explorar os
+corredores e possíveis atalhos antes de calcular a rota.
 
-As duas buscas usam a ordem fixa `up`, `right`, `down`, `left`. Isso garante uma
-escolha consistente quando há mais de um caminho mínimo. A comparação exige
-tanto o mesmo número de passos quanto a mesma sequência de movimentos.
+Explorei toda a região acessível a partir da origem sem atravessar o alvo.
+Essa região é suficiente porque uma rota mínima até o alvo termina na primeira
+entrada nele; não preciso atravessá-lo para descobrir uma rota melhor até ele.
 
-A exploração física percorre cada aresta da árvore DFS na ida e na volta:
-para `V` células visitadas, são `2(V - 1)` movimentos. A análise dos vizinhos
-tem custo `O(V + E)` e o mapa e a pilha usam memória `O(V)`.
+### O que foi feito
 
-## Evidências geradas
+Implementei a leitura do tópico `/culling_games/robot_sensors` com QoS best
+effort compatível com o publicador. Usei as observações das oito células
+vizinhas para registrar paredes, espaços livres e o alvo, mantendo os
+movimentos restritos a cima, direita, baixo e esquerda. Não considerei células
+desconhecidas como transitáveis.
+
+Usei uma pilha na DFS para controlar o avanço e os retornos físicos do robô.
+A cada movimento bem-sucedido, atualizei a linha ou a coluna relativa em uma
+unidade. Usei as posições absolutas retornadas pelo serviço apenas para
+detectar deslocamentos inesperados e ignorei o campo `target_pos`, que também
+é retornado pelo simulador.
+
+Concluí a exploração quando todas as células acessíveis sem atravessar o alvo
+haviam sido visitadas e o robô havia retornado à origem. Depois:
+
+1. Salvei o mapa em JSON e CSV e registrei o trajeto da exploração.
+2. Reabri o JSON e apliquei BFS somente às células descobertas.
+3. Li a referência da parte 1 e comparei o mapa, o alvo, as observações, o
+   custo e a sequência da rota, ajustando a diferença entre coordenadas
+   absolutas e relativas.
+4. Reiniciei o mesmo labirinto e executei a rota calculada com o mapa
+   descoberto.
+
+Mantive a leitura de `parte1.json` somente depois da construção do mapa e do
+cálculo independente da rota. Na comparação, exigi tanto o mesmo número de
+passos quanto a mesma sequência de movimentos da parte 1.
+
+Na exploração, cada aresta da árvore DFS é percorrida na ida e na volta.
+Assim, para `V` células visitadas, o robô realiza `2(V - 1)` movimentos. A
+análise dos vizinhos tem custo `O(V + E)`, e o mapa e a pilha usam memória
+`O(V)`.
+
+## Resultados e testes
+
+### Resultado no simulador
+
+A execução no simulador ROS com `1.csv` está registrada em `resultados/`:
+
+| Medida | Resultado |
+| --- | --- |
+| Rota da parte 1 | 102 passos |
+| Células visitadas na exploração | 391 |
+| Movimentos da exploração, incluindo retornos | 780 |
+| Rota reproduzida na parte 2 | 102 passos, com a mesma sequência da parte 1 |
+
+Todas as verificações em `resultados/comparacao.json` foram concluídas com
+sucesso. Os 780 movimentos da exploração correspondem à ida e à volta pelas
+390 arestas da árvore DFS: `2 × (391 - 1) = 780`.
+
+### Evidências geradas
 
 | Arquivo na pasta de saída | Conteúdo |
 | --- | --- |
@@ -165,12 +232,7 @@ os campos que falharam. Colisões, sensores inconsistentes, limites de passos,
 ausência de caminho e indisponibilidade dos serviços também interrompem a etapa
 com uma mensagem de erro.
 
-## Testes
-
-A execução no simulador ROS com `1.csv` está registrada em `resultados/`:
-102 passos na parte 1, 391 células visitadas em 780 movimentos de exploração
-e reprodução da mesma rota de 102 passos na parte 2. Todas as verificações em
-`resultados/comparacao.json` foram concluídas com sucesso.
+### Testes automatizados
 
 Os algoritmos e a execução podem ser testados sem instalar ROS ou abrir uma
 janela, usando a classe `Robot` original do simulador:
@@ -189,7 +251,7 @@ lida depois de construir o mapa e planejar a rota.
 Esses testes não substituem a execução com os serviços ROS; o simulador deve
 permanecer aberto ao usar o comando `resolver`.
 
-## Limitações do simulador e do ambiente
+## Limitações
 
 - O mapa é estático e os movimentos têm custo unitário. A solução foi feita
   para os labirintos fornecidos, com bordas de paredes.
@@ -209,26 +271,3 @@ permanecer aberto ao usar o comando `resolver`.
   ```bash
   sudo sed -i.bak 's/file(STRINGS "${idl_output}" idl_tuples)/file(STRINGS "${idl_output}" idl_tuples ENCODING UTF-8)/' /opt/ros/jazzy/share/rosidl_adapter/cmake/rosidl_adapt_interfaces.cmake
   ```
-
-## Estrutura
-
-```text
-mapa-ponderada-fabi/
-├── culling_games/                    # Simulador fornecido
-├── src/navegacao_autonoma/
-│   ├── navegacao_autonoma/
-│   │   ├── algorithms.py             # BFS e estado da exploração DFS
-│   │   ├── solver.py                 # Etapas, arquivos e comparação
-│   │   └── node.py                   # Comunicação ROS 2 e comandos
-│   ├── test/test_solution.py
-│   ├── package.xml
-│   └── setup.py
-├── resultados/                       # Evidências produzidas ao executar
-└── README.md
-```
-
-`build/`, `install/`, `log/` e caches Python são gerados localmente e ignorados
-pelo Git. Os arquivos da entrega são o código em `src/`, a cópia do simulador
-em `culling_games/`, as seis evidências em `resultados/`, este README e o
-`.gitignore`. As configurações locais de ferramentas e credenciais também são
-ignoradas pelo Git.
